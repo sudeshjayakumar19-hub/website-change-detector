@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ app_name }} — Dashboard</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+  <!-- Top Navigation -->
+  <header class="top-nav">
+    <div class="nav-container">
+      <a href="/" class="brand">
+        <span class="brand-icon">Δ</span>
+        <div>
+          <span>{{ app_name }}</span>
+          <span class="brand-subtitle">Vinnovate IT — Intelligent Web Monitoring &amp; Diff Engine</span>
+        </div>
+      </a>
+      <div class="nav-actions">
+        <span id="healthPill" class="health-pill" title="Background Scheduler &amp; Service Health">
+          <span class="health-dot"></span>
+          <span id="healthText">Service Online</span>
+        </span>
+        <a href="/docs" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">
+          API Docs (Swagger)
+        </a>
+        <button id="refreshDashboardBtn" type="button" class="btn btn-secondary btn-sm">
+          Refresh
+        </button>
+        <button id="openAddModalBtn" type="button" class="btn btn-primary">
+          + Add Website
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <!-- KPI Statistics Cards -->
+    <section class="stats-grid" aria-label="Monitoring Summary Metrics">
+      <div class="stat-card">
+        <div class="stat-label">Total Monitored Websites</div>
+        <div id="statTotalSites" class="stat-value">0</div>
+        <div id="statSnapshotsSub" class="stat-meta">0 saved version snapshots</div>
+      </div>
+      <div class="stat-card stat-changed">
+        <div class="stat-label">Websites With Detected Changes</div>
+        <div id="statChangedSites" class="stat-value">0</div>
+        <div class="stat-meta">Meaningful content updates captured</div>
+      </div>
+      <div class="stat-card stat-success">
+        <div class="stat-label">Successful Checks</div>
+        <div id="statSuccessfulChecks" class="stat-value">0</div>
+        <div class="stat-meta">HTTP 2xx checks verified &amp; normalized</div>
+      </div>
+      <div class="stat-card stat-failed">
+        <div class="stat-label">Failed Checks</div>
+        <div id="statFailedChecks" class="stat-value">0</div>
+        <div id="statErrorSitesSub" class="stat-meta">0 websites currently in error state</div>
+      </div>
+    </section>
+
+    <!-- 7-Day Activity & Meaningful Changes Chart -->
+    <section class="panel-card" aria-label="Meaningful Changes Over Time">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Meaningful Changes &amp; Check Activity (Last 7 Days)</h2>
+          <p class="panel-subtitle">Daily breakdown of detected content changes, successful checks, and failed checks</p>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-item">
+            <span class="legend-swatch" style="background: var(--accent-orange);"></span>
+            Detected Changes
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch" style="background: var(--status-green);"></span>
+            Successful Checks
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch" style="background: var(--status-red);"></span>
+            Failed Checks
+          </span>
+        </div>
+      </div>
+      <div id="activityChartContainer" class="chart-bars"></div>
+    </section>
+
+    <!-- Monitored Websites Section -->
+    <section class="panel-card" aria-label="Monitored Websites">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Monitored Websites</h2>
+          <p class="panel-subtitle">Public HTTP/HTTPS endpoints monitored with SSRF guard, noise stripping, and SHA-256 content hashing</p>
+        </div>
+        <button id="openAddModalBtnSecondary" type="button" class="btn btn-outline-orange btn-sm">
+          + Monitor New URL
+        </button>
+      </div>
+
+      <div class="toolbar">
+        <div class="filter-tabs" role="tablist">
+          <button type="button" class="filter-tab active" data-filter="all">All</button>
+          <button type="button" class="filter-tab" data-filter="changed">Changed</button>
+          <button type="button" class="filter-tab" data-filter="unchanged">Unchanged</button>
+          <button type="button" class="filter-tab" data-filter="error">Failed / Error</button>
+          <button type="button" class="filter-tab" data-filter="pending">Pending</button>
+        </div>
+        <input
+          id="siteSearchInput"
+          type="search"
+          class="search-input"
+          placeholder="Search by name, URL, or keyword..."
+          aria-label="Search monitored websites"
+        />
+      </div>
+
+      <div id="sitesLoadingState" class="empty-state" style="display: none;">
+        <span class="spinner"></span>
+        <p style="margin-top: 0.65rem;">Loading monitored websites...</p>
+      </div>
+
+      <div id="sitesEmptyState" class="empty-state" style="display: none;">
+        <h3>No Monitored Websites Yet</h3>
+        <p>
+          Add a public HTTP/HTTPS webpage to capture its initial baseline snapshot, track meaningful updates,
+          ignore dynamic noise, and inspect side-by-side version diffs.
+        </p>
+        <button id="emptyStateAddBtn" type="button" class="btn btn-primary">
+          + Add Your First Website
+        </button>
+      </div>
+
+      <div id="sitesListContainer" class="sites-list"></div>
+    </section>
+
+    <!-- Notifications & Alert History Section -->
+    <section class="panel-card" aria-label="Recent Change Notifications">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Notification &amp; Alert History</h2>
+          <p class="panel-subtitle">Deduplicated in-app, email (SMTP), and webhook (Discord/Telegram/JSON) alerts</p>
+        </div>
+        <span id="notifTotalBadge" class="badge badge-tag">0 alerts</span>
+      </div>
+      <div id="notificationsContainer" class="notif-list"></div>
+    </section>
+  </main>
+
+  <!-- Add Website Modal -->
+  <div id="addSiteModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="addSiteModalTitle">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="addSiteModalTitle" class="modal-title">Add Website to Monitor</h3>
+        <button id="closeAddModalBtn" type="button" class="modal-close" aria-label="Close">&times;</button>
+      </div>
+
+      <form id="addSiteForm" class="form-grid" novalidate>
+        <div id="addSiteErrorBox" class="form-error" role="alert"></div>
+
+        <div class="form-group">
+          <label class="form-label" for="siteNameInput">Website Name *</label>
+          <input
+            id="siteNameInput"
+            name="name"
+            type="text"
+            class="form-input"
+            placeholder="e.g., Python Release Announcements"
+            required
+            maxlength="200"
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="siteUrlInput">Public HTTP/HTTPS URL *</label>
+          <input
+            id="siteUrlInput"
+            name="url"
+            type="url"
+            class="form-input"
+            placeholder="https://example.com/news"
+            required
+            maxlength="2048"
+          />
+          <span class="form-hint">
+            Only public HTTP/HTTPS destinations are permitted. Localhost and private IP ranges are blocked (SSRF protection).
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="siteIntervalInput">Check Interval (Minutes: 15 to 1440) *</label>
+          <input
+            id="siteIntervalInput"
+            name="interval_minutes"
+            type="number"
+            class="form-input"
+            min="15"
+            max="1440"
+            value="60"
+            required
+          />
+          <div class="preset-chips">
+            <button type="button" class="preset-chip" data-interval="15">15m (Min)</button>
+            <button type="button" class="preset-chip" data-interval="30">30m</button>
+            <button type="button" class="preset-chip" data-interval="60">1 hour</button>
+            <button type="button" class="preset-chip" data-interval="360">6 hours</button>
+            <button type="button" class="preset-chip" data-interval="720">12 hours</button>
+            <button type="button" class="preset-chip" data-interval="1440">24 hours (Max)</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="siteKeywordsInput">Keywords to Monitor (Optional)</label>
+          <input
+            id="siteKeywordsInput"
+            name="keywords"
+            type="text"
+            class="form-input"
+            placeholder="e.g., security, release, vulnerability, pricing"
+            maxlength="1000"
+          />
+          <span class="form-hint">Comma-separated keywords to highlight and trigger keyword alerts.</span>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label" for="siteCssSelectorInput">Target CSS Selector (Optional)</label>
+            <input
+              id="siteCssSelectorInput"
+              name="css_selector"
+              type="text"
+              class="form-input"
+              placeholder="e.g., main article, #release-notes"
+              maxlength="500"
+            />
+            <span class="form-hint">Monitor only a specific region of the page.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="siteIgnoreSelectorInput">Ignore CSS Selector (Optional)</label>
+            <input
+              id="siteIgnoreSelectorInput"
+              name="ignore_selector"
+              type="text"
+              class="form-input"
+              placeholder="e.g., .ads, .live-counter, #banner"
+              maxlength="500"
+            />
+            <span class="form-hint">Strip matching noisy elements before hashing.</span>
+          </div>
+        </div>
+
+        <label class="checkbox-row">
+          <input id="siteKeywordOnlyCheckbox" type="checkbox" name="keyword_only_alerts" />
+          <span>Keyword-only alerts (only trigger notifications when detected changes match keywords)</span>
+        </label>
+
+        <label class="checkbox-row">
+          <input id="sitePlaywrightCheckbox" type="checkbox" name="use_playwright" />
+          <span>Enable Playwright headless browser fallback for JS-heavy pages</span>
+        </label>
+
+        <label class="checkbox-row">
+          <input id="runInitialCheckCheckbox" type="checkbox" checked />
+          <span>Capture initial baseline snapshot immediately after adding</span>
+        </label>
+
+        <div class="modal-footer">
+          <button id="cancelAddModalBtn" type="button" class="btn btn-secondary">Cancel</button>
+          <button id="submitAddSiteBtn" type="submit" class="btn btn-primary">
+            Add Website
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteConfirmModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+    <div class="modal-box" style="max-width: 460px;">
+      <div class="modal-header">
+        <h3 id="deleteModalTitle" class="modal-title">Confirm Website Deletion</h3>
+        <button id="closeDeleteModalBtn" type="button" class="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <p style="color: var(--text-secondary); font-size: 0.92rem;">
+        Are you sure you want to delete <strong id="deleteSiteNameLabel" style="color: var(--text-primary);"></strong>?
+        This will permanently remove all saved snapshots, check logs, and notifications for this website.
+      </p>
+      <div class="modal-footer">
+        <button id="cancelDeleteBtn" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="confirmDeleteBtn" type="button" class="btn btn-danger">Delete Permanently</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

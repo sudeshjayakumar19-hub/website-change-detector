@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ site_name }} — Version History &amp; Diff Viewer | {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <link
+    rel="alternate"
+    type="application/rss+xml"
+    title="{{ site_name }} Change Feed"
+    href="/api/sites/{{ site_id }}/rss"
+  />
+</head>
+<body data-site-id="{{ site_id }}">
+  <!-- Top Navigation -->
+  <header class="top-nav">
+    <div class="nav-container">
+      <a href="/" class="brand">
+        <span class="brand-icon">Δ</span>
+        <div>
+          <span>{{ app_name }}</span>
+          <span class="brand-subtitle">Version History &amp; Side-by-Side Diff Viewer</span>
+        </div>
+      </a>
+      <div class="nav-actions">
+        <a href="/" class="btn btn-secondary btn-sm">&larr; Back to Dashboard</a>
+        <a
+          href="/api/sites/{{ site_id }}/rss"
+          target="_blank"
+          rel="noopener"
+          class="btn btn-outline-orange btn-sm"
+        >
+          RSS Feed
+        </a>
+        <button id="historyCheckNowBtn" type="button" class="btn btn-primary btn-sm">
+          Check Now
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <!-- Website Summary Banner -->
+    <section class="panel-card" aria-label="Monitored Website Metadata">
+      <div class="site-card-top">
+        <div class="site-title-group">
+          <div class="site-name-row">
+            <h1 id="historySiteName" class="site-name" style="font-size: 1.35rem;">{{ site_name }}</h1>
+            <span id="historyStatusBadge" class="badge badge-pending">Loading...</span>
+          </div>
+          <a
+            id="historySiteUrl"
+            href="{{ site_url }}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="site-url"
+          >{{ site_url }}</a>
+        </div>
+        <div id="historyConfigTags" class="site-actions"></div>
+      </div>
+
+      <div class="site-meta-grid" style="margin-top: 1rem;">
+        <div class="meta-item">
+          <span class="meta-label">Check Interval</span>
+          <span id="metaInterval" class="meta-value">—</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Last Checked</span>
+          <span id="metaLastChecked" class="meta-value">—</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Last Changed</span>
+          <span id="metaLastChanged" class="meta-value">—</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Saved Versions</span>
+          <span id="metaSnapshotCount" class="meta-value">0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Diff Comparison Viewer -->
+    <section class="panel-card" aria-label="Version Diff Viewer">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Version Diff &amp; Before/After Comparison</h2>
+          <p class="panel-subtitle">Compare any two saved snapshots with added lines in green and removed lines in red</p>
+        </div>
+        <div class="filter-tabs" role="tablist">
+          <button type="button" class="filter-tab active" data-diff-mode="side-by-side">
+            Side-by-Side Diff
+          </button>
+          <button type="button" class="filter-tab" data-diff-mode="unified">
+            Unified Diff
+          </button>
+          <button type="button" class="filter-tab" data-diff-mode="before-after">
+            Visual Before &amp; After
+          </button>
+        </div>
+      </div>
+
+      <div id="diffControlsBar" class="diff-controls-bar" style="display: none;">
+        <div class="diff-selectors">
+          <div class="form-group">
+            <label class="form-label" for="fromVersionSelect">Baseline Version (Older)</label>
+            <select id="fromVersionSelect" class="form-input"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="toVersionSelect">Target Version (Newer)</label>
+            <select id="toVersionSelect" class="form-input"></select>
+          </div>
+          <button id="compareVersionsBtn" type="button" class="btn btn-primary">
+            Compare Versions
+          </button>
+        </div>
+      </div>
+
+      <div id="diffStatsStrip" class="diff-stats-strip" style="display: none;">
+        <div class="diff-stat-pills">
+          <span id="diffAddedPill" class="pill-added">+0 added</span>
+          <span id="diffRemovedPill" class="pill-removed">-0 removed</span>
+          <span id="diffSimilarityBadge" class="badge badge-tag">100% similarity</span>
+        </div>
+        <div id="diffOneLineSummary" style="color: var(--text-secondary); font-weight: 500;"></div>
+      </div>
+
+      <div id="diffEmptyState" class="empty-state" style="display: none;">
+        <h3>No Snapshots Captured Yet</h3>
+        <p>Click "Check Now" above to fetch this webpage and store its initial baseline snapshot.</p>
+      </div>
+
+      <div id="diffNoChangesBanner" class="no-changes-banner" style="display: none;">
+        <strong>No meaningful changes found between the selected versions.</strong>
+        <p style="font-size: 0.85rem; margin-top: 0.25rem; opacity: 0.9;">
+          Both snapshots share an identical normalized content hash. Below is the full normalized content.
+        </p>
+      </div>
+
+      <!-- Side-by-Side Diff View -->
+      <div id="sideBySideView" class="diff-table-wrapper" style="display: none;">
+        <table class="diff-table">
+          <thead>
+            <tr>
+              <th style="width: 46px;">#</th>
+              <th id="leftDiffHeader" style="width: 50%;">Baseline Version</th>
+              <th style="width: 46px;">#</th>
+              <th id="rightDiffHeader" style="width: 50%;">Target Version</th>
+            </tr>
+          </thead>
+          <tbody id="sideBySideTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Unified Diff View -->
+      <div id="unifiedDiffView" class="diff-table-wrapper" style="display: none;">
+        <table class="diff-table">
+          <thead>
+            <tr>
+              <th style="width: 46px;">Old</th>
+              <th style="width: 46px;">New</th>
+              <th>Unified Diff Line</th>
+            </tr>
+          </thead>
+          <tbody id="unifiedDiffTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Visual Before & After Full-Text Comparison -->
+      <div id="beforeAfterView" class="before-after-grid" style="display: none;">
+        <div class="snapshot-pane">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.65rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.45rem;">
+            <strong id="beforePaneTitle" style="color: var(--diff-del-text);">Before</strong>
+            <span id="beforePaneMeta" class="badge badge-tag"></span>
+          </div>
+          <pre id="beforePaneText"></pre>
+        </div>
+        <div class="snapshot-pane">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.65rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.45rem;">
+            <strong id="afterPaneTitle" style="color: var(--diff-add-text);">After</strong>
+            <span id="afterPaneMeta" class="badge badge-tag"></span>
+          </div>
+          <pre id="afterPaneText"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chronological Snapshots History -->
+    <section class="panel-card" aria-label="Chronological Version Snapshots">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Chronological Snapshots</h2>
+          <p class="panel-subtitle">Deduplicated versions saved only when normalized SHA-256 content hash changes</p>
+        </div>
+      </div>
+      <div id="snapshotsTimelineList" class="notif-list"></div>
+    </section>
+
+    <!-- Recent Check Runs Log -->
+    <section class="panel-card" aria-label="Check Execution Telemetry">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Recent Check Executions</h2>
+          <p class="panel-subtitle">Structured check duration, HTTP status codes, and failure diagnostics</p>
+        </div>
+      </div>
+      <div id="checkRunsList" class="notif-list"></div>
+    </section>
+  </main>
+
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <script src="/static/js/history.js"></script>
+</body>
+</html>
